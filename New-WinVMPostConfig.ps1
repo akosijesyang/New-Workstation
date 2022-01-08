@@ -50,7 +50,7 @@ while ($RenameComputer -eq "y") {
         Write-Host "This machine will be joined to $($ADDomain)..." -ForegroundColor Yellow -BackgroundColor Black
         Write-Host "!--Make sure you have the right credentials." -ForegroundColor Red -BackgroundColor Black
         Start-Sleep 1
-        Add-Computer -DomainName "$($ADDomain)" # Joins the machine to the domain
+        Add-Computer -DomainName $($ADDomain) -Credential (Get-Credential -Message "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
         Break
     }
     else {
