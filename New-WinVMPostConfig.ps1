@@ -1,5 +1,9 @@
-Set-ExecutionPolicy -Scope MachinePolicy Unrestricted # Allows script to run without error
+Set-ExecutionPolicy -Scope CurrentUser Unrestricted -ErrorAction SilentlyContinue `
+    -InformationAction SilentlyContinue # Allows script to run without error
 $ErrorActionPreference = 'silentlycontinue' # Hides error caused by Set-ExecutionPolicy
+
+Write-Host "!--NOTE: Make sure you already modified the values in Global Variables`n`n" -ForegroundColor DarkYellow
+Start-Sleep 2
 
 # Global Variables
 $ADDomain = "ad.homelab.net" # Change as needed
@@ -15,106 +19,109 @@ $RSAT = 'RSAT: DHCP Server Tools',
 'RSAT: Server Manager',
 'RSAT: Active Directory Domain Services and Lightweight Directory Services Tools' # Add RSAT as needed; use Get-WindowsCapability to discover
 
-# Windows Update
-Write-Host "Do you want to update this machine via Windows Update?" -ForegroundColor Yellow -BackgroundColor Black
-$WindowsUpdate = Read-host "Type Y to UPDATE, ELSE press any key to skip..."
-while ($WindowsUpdate -eq "y") {
-    Write-Host "`nPreparing machines for Windows Update..." -ForegroundColor Yellow -BackgroundColor Black
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 # Allowing to download PS Module
-    if ($(Get-InstalledModule).Name -eq "PSWindowsUpdate") {
-        Write-Host "`nPSWindowsUpdate module was found! Will try to update the module..." -ForegroundColor Yellow -BackgroundColor Black
-        Get-InstalledModule -Name "PSWindowsUpdate" | Uninstall-Module -Force -ErrorAction SilentlyContinue `
-            -InformationAction SilentlyContinue -WarningAction SilentlyContinue # Removes old PSWindowsUpdate module
-        Install-Module -Name PSWindowsUpdate # Installs the latest PSWindowsUpdate module
-    } 
-    else {
-        Write-Host "`nPSWindowsUpdate module not found! Getting the module..." -ForegroundColor Yellow -BackgroundColor Black
-        Install-Module -Name PSWindowsUpdate # Installs PSWindowsUpdate Module
-    }
-    Start-Sleep 1
-    Get-WindowsUpdate -AcceptAll -Install -IgnoreRebootRequired -IgnoreReboot
-    Break
-}
-Write-Host "`nOnto the next step..." -ForegroundColor Green
+Write-Host "Internet connectivity test..." -ForegroundColor Yellow -BackgroundColor Black
 Start-Sleep 2
-
-# Join to domain
-Write-Host "`n`nDo you want to join this computer to domain?" -ForegroundColor Yellow -BackgroundColor Black
-$RenameComputer = Read-host "Type Y to JOIN, else press any key to skip..."
-while ($RenameComputer -eq "y") {
-    Write-Host "Contacting $($ADDomain)..." -ForegroundColor Red -BackgroundColor Black
-    if (Test-Connection -ComputerName $ADDomain -Count 1) {
-        Write-Host "AD domain $($ADDomain) is reachable..." -ForegroundColor Yellow -BackgroundColor Black
-        Start-Sleep 1
-        Write-Host "This machine will be joined to $($ADDomain)..." -ForegroundColor Yellow -BackgroundColor Black
-        Write-Host "!--Make sure you have the right credentials." -ForegroundColor Red -BackgroundColor Black
-        Start-Sleep 1
-        Add-Computer -DomainName $($ADDomain) -Credential (Get-Credential -Message "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
-        Break
-    }
-    else {
-        Write-Host "$($ADDomain) is unreachable..." -ForegroundColor Red -BackgroundColor Black
-        Break
-    }
-}
-Write-Host "`nOnto the next step..." -ForegroundColor Green
-Start-Sleep 2
-
-# Install Server Tools
-Write-Host "Do you want to install server tools (AD,GP,DNS,DHCP)?" -ForegroundColor Yellow -BackgroundColor Black
-Start-Sleep 1
-$Install = Read-Host "Type Y to INSTALL, else press any key to skip..."
-while ($Install -eq "y") {
-    Start-Sleep 1
-    Write-Host "Detecting OS type..." -ForegroundColor Yellow
-    $OSDetection = Get-WmiObject -Class "Win32_OperatingSystem"
-    $OSDetection.Caption -contains "server"
-    if ($OSDetection.Caption -contains "server") {
-        Write-Host "Installing Server Management Tools for SERVER..." -ForegroundColor Yellow
-        foreach ($tool in $RSATServer) {
-            Get-WindowsFeature -Name $tool | Install-WindowsFeature -IncludeAllSubFeature
+if (Test-Connection -ComputerName 8.8.8.8 -coun 1) {
+    Write-Host "!--PASSED: Connected to the Internet`n`n" -ForegroundColor Green
+    # Windows Update
+    Write-Host "Do you want to update this machine via Windows Update?" -ForegroundColor Yellow
+    $WindowsUpdate = Read-host "Type Y to UPDATE, ELSE press any key to skip..."
+    while ($WindowsUpdate -eq "y") {
+        Write-Host "Preparing machines for Windows Update..."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 # Allowing to download PS Module
+        if ($(Get-InstalledModule).Name -eq "PSWindowsUpdate") {
+            Write-Host "PSWindowsUpdate module was found! Will try to update the module..."
+            Get-InstalledModule -Name "PSWindowsUpdate" | Uninstall-Module -Force -ErrorAction SilentlyContinue `
+                -InformationAction SilentlyContinue -WarningAction SilentlyContinue # Removes old PSWindowsUpdate module
+            Install-Module -Name PSWindowsUpdate # Installs the latest PSWindowsUpdate module
         } 
-        Break
-    }
-    else {
-        Write-Host "Installing RSAT for WORKSTATION..." -ForegroundColor Yellow
-
-        foreach ($tool in $RSAT) {
-            Get-WindowsCapability -Name *RSAT* -Online | Where-Object { $PSItem.DisplayName -eq $tool `
-                    -and $PSItem.State -eq "NotPresent" } | Add-WindowsCapability -Online
+        else {
+            Write-Host "PSWindowsUpdate module not found! Getting the module..."
+            Install-Module -Name PSWindowsUpdate # Installs PSWindowsUpdate Module
         }
+        Get-WindowsUpdate -AcceptAll -Install -IgnoreRebootRequired -IgnoreReboot
         Break
     }
+    Write-Host "Onto the next step...`n" -ForegroundColor Yellow
+    
+    # Install Server Tools
+    Write-Host "Do you want to install server tools (AD,GP,DNS,DHCP)?" -ForegroundColor Yellow
+    $Install = Read-Host "Type Y to INSTALL, else press any key to skip..."
+    while ($Install -eq "y") {
+        Write-Host "Detecting OS type..."
+        $OSDetection = Get-WmiObject -Class "Win32_OperatingSystem"
+        $OSDetection.Caption -contains "server"
+        if ($OSDetection.Caption -contains "server") {
+            Write-Host "Installing Server Management Tools for SERVER..."
+            foreach ($tool in $RSATServer) {
+                Get-WindowsFeature -Name $tool | Install-WindowsFeature -IncludeAllSubFeature
+            } 
+            Break
+        }
+        else {
+            Write-Host "Installing RSAT for WORKSTATION..."
+
+            foreach ($tool in $RSAT) {
+                Get-WindowsCapability -Name *RSAT* -Online | Where-Object { $PSItem.DisplayName -eq $tool `
+                        -and $PSItem.State -eq "NotPresent" } | Add-WindowsCapability -Online
+            }
+            Break
+        }
+    }
+    Write-Host "Onto the next step...`n" -ForegroundColor Yellow
+
+    # Join to domain and rename computer
+    Write-Host "Do you want to RENAME this computer and JOIN to a domain?" -ForegroundColor Yellow
+    $RenamexJoinComputer = Read-host "Type Y to RENAME & JOIN, else press any key to skip..."
+    while ($RenamexJoinComputer -eq "y") {
+        {
+            Write-Host "Contacting $($ADDomain)..."
+            if (Test-Connection -ComputerName $ADDomain -Count 1) {
+                Write-Host "AD domain $($ADDomain) is reachable..."
+                Write-Host "This machine will be joined to $($ADDomain)..."
+                Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
+                Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
+                Write-Host "!--Make sure you have the right credentials" -ForegroundColor Red -BackgroundColor Black
+                $NewName = Read-Host "Enter computer name"
+                while ($NewName[0] -in $s) {
+                    Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
+                    Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
+                    $NewName = Read-Host "Enter a VALID computer name"
+                }
+                if ($NewName.Length -gt 14) {
+                    $NewName.Trim() # Clears white spaces from beginning and end
+                    $TrimmedNewName = $NewName.Remove(14) # Remove extra characters
+                    Write-Host "Computer name was trimmed to $($TrimmedNewName)" -ForegroundColor Yellow
+                }
+                Add-Computer -NewName $TrimmedNewName -DomainName $($ADDomain) -Credential (Get-Credential -Message `
+                        "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
+                Break
+            }
+            else {
+                Write-Host "$($ADDomain) is unreachable..." -ForegroundColor Red
+                Break
+            }
+        }
+    }
+    Write-Host "Onto the next step...`n" -ForegroundColor Yellow
+
+    # Reboot Computer
+    Write-Host "Do you want to restart now?" -ForegroundColor Yellow
+    Write-Host "!--All document changes will be lost if not saved when rebooted" -ForegroundColor Red -BackgroundColor Black
+    $RestartNow = Read-Host "Type Y to RESTART, else press any key to skip..."
+    while ($RestartNow -eq "y") {
+        Start-Sleep 2
+        Restart-Computer -Force
+    }
+    Write-Host "Restart skipped..." -ForegroundColor Yellow
+    Start-Sleep 2
+    Write-Host "Exiting..." -ForegroundColor Yellow
+    Exit
 }
-Write-Host "`nOnto the next step..." -ForegroundColor Green
-Start-Sleep 2
-
-# Rename Computer
-Write-Host "`n`nDo you want to RENAME this computer?" -ForegroundColor Yellow -BackgroundColor Black
-$RenameComputer = Read-host "Type Y to rename, else press any key to skip..."
-while ($RenameComputer -eq "y") {
-    Write-Host "!--Make sure computer name starts with a letter and does not contain spaces" -ForegroundColor Red -BackgroundColor Black
-    Start-Sleep 1
-    $NewComputerName = Read-Host "Enter computer name"
-    Write-Host "`nRenamming computer..." -ForegroundColor Yellow -BackgroundColor Black
-    Start-Sleep 1
-    Rename-Computer -NewName $NewComputerName.Trim() # Renames the computer; removes any spaces from start and end of the name set by the user
-    Break
+else {
+    Write-host "!--FAILED: Machine is not connected to the Internet." -ForegroundColor Red
+    Write-Host "Connect to the Internet and try again"
+    Start-Sleep 2
+    Write-Host "Exiting..." -ForegroundColor Yellow
+    Exit
 }
-Write-Host "`nOnto the next step..." -ForegroundColor Green
-Start-Sleep 2
-
-
-
-# Reboot Computer
-Write-Host "`n`nDo you want to restart now?" -ForegroundColor Yellow -BackgroundColor Black
-Start-Sleep 1
-Write-Host "!--All document changes will be lost if not saved when rebooted" -ForegroundColor Red -BackgroundColor Black
-Start-Sleep 1
-$RestartNow = Read-Host "Type Y to RESTART, else press any key to skip..."
-while ($RestartNow -eq "y") {
-    Restart-Computer -Force
-}
-Write-Host "`nRestart skipped..."-ForegroundColor Yellow
-Start-Sleep 2
-Exit
