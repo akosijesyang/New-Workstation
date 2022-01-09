@@ -1,14 +1,26 @@
+Set-ExecutionPolicy -Scope MachinePolicy Unrestricted # Allows script to run without error
+$ErrorActionPreference = 'silentlycontinue' # Hides error caused by Set-ExecutionPolicy
+
 # Global Variables
 $ADDomain = "ad.homelab.net" # Change as needed
-$ErrorActionPreference= 'silentlycontinue'
+$RSATServer = 'RSAT-Clustering',
+'RSAT-AD-Tools',
+'RSAT-DHCP',
+'RSAT-DNS-Server',
+'GPMC' # Add server management tools as needed; use Get-WindowsFeature to discover
+$RSAT = 'RSAT: DHCP Server Tools', 
+'RSAT: DNS Server Tools',
+'RSAT: Failover Clustering Tools',
+'RSAT: Group Policy Management Tools',
+'RSAT: Server Manager',
+'RSAT: Active Directory Domain Services and Lightweight Directory Services Tools' # Add RSAT as needed; use Get-WindowsCapability to discover
 
-Set-ExecutionPolicy -Scope MachinePolicy Unrestricted
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 # Allowing to download PS Module
 # Windows Update
 Write-Host "Do you want to update this machine via Windows Update?" -ForegroundColor Yellow -BackgroundColor Black
 $WindowsUpdate = Read-host "Type Y to UPDATE, ELSE press any key to skip..."
 while ($WindowsUpdate -eq "y") {
     Write-Host "`nPreparing machines for Windows Update..." -ForegroundColor Yellow -BackgroundColor Black
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 # Allowing to download PS Module
     if ($(Get-InstalledModule).Name -eq "PSWindowsUpdate") {
         Write-Host "`nPSWindowsUpdate module was found! Will try to update the module..." -ForegroundColor Yellow -BackgroundColor Black
         Get-InstalledModule -Name "PSWindowsUpdate" | Uninstall-Module -Force -ErrorAction SilentlyContinue `
@@ -25,20 +37,7 @@ while ($WindowsUpdate -eq "y") {
 }
 Write-Host "`nOnto the next step..." -ForegroundColor Green
 Start-Sleep 2
-# Rename Computer
-Write-Host "`n`nDo you want to RENAME this computer?" -ForegroundColor Yellow -BackgroundColor Black
-$RenameComputer = Read-host "Type Y to rename, else press any key to skip..."
-while ($RenameComputer -eq "y") {
-    Write-Host "!--Make sure computer name starts with a letter and does not contain spaces" -ForegroundColor Red -BackgroundColor Black
-    Start-Sleep 1
-    $NewComputerName = Read-Host "Enter computer name"
-    Write-Host "`nRenamming computer..." -ForegroundColor Yellow -BackgroundColor Black
-    Start-Sleep 1
-    Rename-Computer -NewName $NewComputerName.Trim() # Renames the computer; removes any spaces from start and end of the name set by the user
-    Break
-}
-Write-Host "`nOnto the next step..." -ForegroundColor Green
-Start-Sleep 2
+
 # Join to domain
 Write-Host "`n`nDo you want to join this computer to domain?" -ForegroundColor Yellow -BackgroundColor Black
 $RenameComputer = Read-host "Type Y to JOIN, else press any key to skip..."
@@ -60,6 +59,53 @@ while ($RenameComputer -eq "y") {
 }
 Write-Host "`nOnto the next step..." -ForegroundColor Green
 Start-Sleep 2
+
+# Install Server Tools
+Write-Host "Do you want to install server tools (AD,GP,DNS,DHCP)?" -ForegroundColor Yellow -BackgroundColor Black
+Start-Sleep 1
+$Install = Read-Host "Type Y to INSTALL, else press any key to skip..."
+while ($Install -eq "y") {
+    Start-Sleep 1
+    Write-Host "Detecting OS type..." -ForegroundColor Yellow
+    $OSDetection = Get-WmiObject -Class "Win32_OperatingSystem"
+    $OSDetection.Caption -contains "server"
+    if ($OSDetection.Caption -contains "server") {
+        Write-Host "Installing Server Management Tools for SERVER..." -ForegroundColor Yellow
+        foreach ($tool in $RSATServer) {
+            Get-WindowsFeature -Name $tool | Install-WindowsFeature -IncludeAllSubFeature
+        } 
+        Break
+    }
+    else {
+        Write-Host "Installing RSAT for WORKSTATION..." -ForegroundColor Yellow
+
+        foreach ($tool in $RSAT) {
+            Get-WindowsCapability -Name *RSAT* -Online | Where-Object { $PSItem.DisplayName -eq $tool `
+                    -and $PSItem.State -eq "NotPresent" } | Add-WindowsCapability -Online
+        }
+        Break
+    }
+}
+Write-Host "`nOnto the next step..." -ForegroundColor Green
+Start-Sleep 2
+
+# Rename Computer
+Write-Host "`n`nDo you want to RENAME this computer?" -ForegroundColor Yellow -BackgroundColor Black
+$RenameComputer = Read-host "Type Y to rename, else press any key to skip..."
+while ($RenameComputer -eq "y") {
+    Write-Host "!--Make sure computer name starts with a letter and does not contain spaces" -ForegroundColor Red -BackgroundColor Black
+    Start-Sleep 1
+    $NewComputerName = Read-Host "Enter computer name"
+    Write-Host "`nRenamming computer..." -ForegroundColor Yellow -BackgroundColor Black
+    Start-Sleep 1
+    Rename-Computer -NewName $NewComputerName.Trim() # Renames the computer; removes any spaces from start and end of the name set by the user
+    Break
+}
+Write-Host "`nOnto the next step..." -ForegroundColor Green
+Start-Sleep 2
+
+
+
 # Reboot Computer
 Write-Host "`n`nDo you want to restart now?" -ForegroundColor Yellow -BackgroundColor Black
 Start-Sleep 1
