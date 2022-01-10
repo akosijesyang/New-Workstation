@@ -1,8 +1,8 @@
 Set-ExecutionPolicy -Scope CurrentUser Unrestricted -ErrorAction SilentlyContinue `
     -InformationAction SilentlyContinue # Allows script to run without error
-$ErrorActionPreference = 'silentlycontinue' # Hides error caused by Set-ExecutionPolicy
+#$ErrorActionPreference = 'silentlycontinue' # Hides error caused by Set-ExecutionPolicy
 
-Write-Host "`n`n!--NOTE: Make sure you already modified the values in Global Variables`n`n" -ForegroundColor DarkYellow
+Write-Host "`n`n!--NOTE: Make sure you already modified the values in Global Variables`n`n" -ForegroundColor DarkCyan
 Start-Sleep 2
 
 # Global Variables
@@ -81,20 +81,22 @@ if (Test-Connection -ComputerName 8.8.8.8 -count 1) {
                 Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
                 Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
                 Write-Host "!--Make sure you have the right credentials" -ForegroundColor Red -BackgroundColor Black
+                Write-Host "!--Failing to follow all instructions will cause the JOIN and RENAME to fail" -ForegroundColor DarkCyan -BackgroundColor Black
                 $NewName = Read-Host "Enter computer name"
                 $InvalidBeginningCharacter = '0','1','2','3','4','5','6','7','8','9','.','\','/',':','*','"','<','>','|',',','~','!','@','#','$','%','^','&','(',')','{','}','_',';',' '
-                $InvalidCharacters = '.','\','/',':','*','"','<','>','|',',','~','!','@','#','$','%','^','&','(',')','{','}','_',';',' '
-                while ($NewName[0] -in $InvalidBeginningCharacter -or $NewName -eq ""-or $NewName -contains $InvalidCharacters) {
+                while ($NewName[0] -in $InvalidBeginningCharacter -or $NewName -eq "") {
                     Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
                     Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
                     $NewName = Read-Host "Enter a VALID computer name"
+                    Add-Computer -NewName $TrimmedNewName -DomainName $($ADDomain) -Credential (Get-Credential -Message `
+                        "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
                 }
                 if ($NewName.Length -gt 14) {
                     $NewName.Trim() # Clears white spaces from beginning and end
                     $TrimmedNewName = $NewName.Remove(14) # Remove extra characters
                     Write-Host "Computer name was trimmed to $($TrimmedNewName)"
                 }
-                Add-Computer -NewName $TrimmedNewName -DomainName $($ADDomain) -Credential (Get-Credential -Message `
+                Add-Computer -NewName $NewName -DomainName $ADDomain -Credential (Get-Credential -Message `
                         "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
             }
             else {
