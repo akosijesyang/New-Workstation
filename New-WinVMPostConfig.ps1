@@ -2,7 +2,8 @@ Set-ExecutionPolicy -Scope CurrentUser Unrestricted -ErrorAction SilentlyContinu
     -InformationAction SilentlyContinue # Allows script to run without error
 #$ErrorActionPreference = 'silentlycontinue' # Hides error caused by Set-ExecutionPolicy
 
-Write-Host "`n`n!--NOTE: Make sure you already modified the values in Global Variables`n`n" -ForegroundColor DarkCyan
+Write-Host "`n`n!--IMPORTANT: Make sure you already modified the values in Global Variables" -ForegroundColor DarkCyan
+Write-Host "!--IMPORTANT: This script is intended ONLY to be run on NEWLY BUILT WINDOWS machine`n`n" -ForegroundColor DarkCyan
 Start-Sleep 2
 
 # Global Variables
@@ -53,8 +54,8 @@ if (Test-Connection -ComputerName 8.8.8.8 -count 1) {
         if ($OSDetection.Caption -match "server") {
             Write-Host "Installing Server Management Tools for SERVER..."
             foreach ($tool in $RSATServer) {
-                Get-WindowsFeature -Name $tool | Where-Object {$PSItem.Name -eq $tool -and $PSItem.Installed `
-                    -ne "Installed"} | Install-WindowsFeature -IncludeAllSubFeature
+                Get-WindowsFeature -Name $tool | Where-Object { $PSItem.Name -eq $tool -and $PSItem.Installed `
+                        -ne "Installed" } | Install-WindowsFeature -IncludeAllSubFeature
             } 
             Break
         }
@@ -74,35 +75,32 @@ if (Test-Connection -ComputerName 8.8.8.8 -count 1) {
     Write-Host "Do you want to RENAME this computer and JOIN to a domain?" -ForegroundColor Yellow
     $RenamexJoinComputer = Read-host "Type Y to RENAME & JOIN, else press any key to skip..."
     while ($RenamexJoinComputer -eq "y") {
-            Write-Host "Contacting $($ADDomain)..." -ForegroundColor Yellow -BackgroundColor Black
-            if (Test-Connection -ComputerName $ADDomain -Count 1) {
-                Write-Host "AD domain $($ADDomain) is reachable..." -ForegroundColor Green
-                Write-Host "This machine will be joined to $($ADDomain)..."
+        Write-Host "Contacting $($ADDomain)..." -ForegroundColor Yellow -BackgroundColor Black
+        if (Test-Connection -ComputerName $($ADDomain) -Count 1) {
+            Write-Host "AD domain ad.homelab.net is reachable..." -ForegroundColor Green
+            Write-Host "This machine will be joined to ad.homelab.net..."
+            Function Test-NewComputerName {
                 Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
-                Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
                 Write-Host "!--Make sure you have the right credentials" -ForegroundColor Red -BackgroundColor Black
                 Write-Host "!--Failing to follow all instructions will cause the JOIN and RENAME to fail" -ForegroundColor DarkCyan -BackgroundColor Black
-                $NewName = Read-Host "Enter computer name"
-                $InvalidBeginningCharacter = '0','1','2','3','4','5','6','7','8','9','.','\','/',':','*','"','<','>','|',',','~','!','@','#','$','%','^','&','(',')','{','}','_',';',' '
-                while ($NewName[0] -in $InvalidBeginningCharacter -or $NewName -eq "") {
-                    Write-Host "!--New name SHOULD NOT: (a) begin with a number (b) have space nor special character" -ForegroundColor Red -BackgroundColor Black
-                    Write-Host "!--New name with more than 14 characters will be automatically trimmed" -ForegroundColor Red -BackgroundColor Black
-                    $NewName = Read-Host "Enter a VALID computer name"
-                    Add-Computer -NewName $TrimmedNewName -DomainName $($ADDomain) -Credential (Get-Credential -Message `
-                        "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
+                $NewName = Read-Host "Enter valid computer name"
+                $CharacterCount = $NewName.Length
+                if ($NewName -match '(?:^[0-9])|[.\\/:*"<>|,~!@#$%^&(){}_; ]+' `
+                        -or $NewName[0] -match '(?:^[0-9])|[-.\\/:*"<>|,~!@#$%^&(){}_; ]' `
+                        -or $CharacterCount -ge '14') {
+                    Write-Host "!--INVALID computer name format! Try a new one" -ForegroundColor Red -BackgroundColor Black
+                    Test-NewComputerName
                 }
-                if ($NewName.Length -gt 14) {
-                    $NewName.Trim() # Clears white spaces from beginning and end
-                    $TrimmedNewName = $NewName.Remove(14) # Remove extra characters
-                    Write-Host "Computer name was trimmed to $($TrimmedNewName)"
+                else {
+                    Add-Computer -NewName $NewName -DomainName $($ADDomain) -Credential (Get-Credential -Message `
+                            "FORMAT: $($ADDomain)\<user_account>" -ErrorAction SilentlyContinue) # Joins the machine to the domain}
                 }
-                Add-Computer -NewName $NewName -DomainName $ADDomain -Credential (Get-Credential -Message `
-                        "FORMAT: domain\account" -ErrorAction Stop) # Joins the machine to the domain
             }
-            else {
-                Write-Host "$($ADDomain) is unreachable..." -ForegroundColor Red
-                Break
-            }
+            Test-NewComputerName
+        }  
+        else {
+            Write-Host "ad.homelab.net is unreachable..." -ForegroundColor Red
+        }
         Break
     }
     Write-Host "Onto the next step...`n" -ForegroundColor Yellow
