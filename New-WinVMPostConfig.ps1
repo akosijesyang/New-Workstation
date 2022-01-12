@@ -85,6 +85,7 @@ if (Test-Connection -ComputerName 8.8.8.8 -count 1) {
                 Write-Host "!--Failing to follow all instructions will cause the JOIN and RENAME to fail" -ForegroundColor DarkCyan -BackgroundColor Black
                 $NewName = Read-Host "Enter valid computer name"
                 $CharacterCount = $NewName.Length
+                # Big thanks to RichMatheisen-8856 for helping to correct my condition - https://docs.microsoft.com/en-us/answers/questions/688633/spot-invalid-characters-in-computer-name.html
                 if ($NewName -match '(?:^[0-9])|[.\\/:*"<>|,~!@#$%^&(){}_; ]+' `
                         -or $NewName[0] -match '(?:^[0-9])|[-.\\/:*"<>|,~!@#$%^&(){}_; ]' `
                         -or $CharacterCount -ge '14') {
